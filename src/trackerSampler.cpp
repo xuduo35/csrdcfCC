@@ -39,80 +39,104 @@
  //
  //M*/
 
-#ifndef __OPENCV_ONLINEMIL_HPP__
-#define __OPENCV_ONLINEMIL_HPP__
-
-#include "opencv2/core.hpp"
-#include <limits>
+#include "precomp.hpp"
 
 namespace cv
 {
 
-//! @addtogroup tracking
-//! @{
+/*
+ *  TrackerSampler
+ */
 
-//TODO based on the original implementation
-//http://vision.ucsd.edu/~bbabenko/project_miltrack.shtml
-
-class ClfOnlineStump;
-
-class CV_EXPORTS ClfMilBoost
+/*
+ * Constructor
+ */
+TrackerSampler::TrackerSampler()
 {
- public:
-  struct CV_EXPORTS Params
-  {
-    Params();
-    int _numSel;
-    int _numFeat;
-    float _lRate;
-  };
+  blockAddTrackerSampler = false;
+}
 
-  ClfMilBoost();
-  ~ClfMilBoost();
-  void init( const ClfMilBoost::Params &parameters = ClfMilBoost::Params() );
-  void update( const Mat& posx, const Mat& negx );
-  std::vector<float> classify( const Mat& x, bool logR = true );
+/*
+ * Destructor
+ */
+TrackerSampler::~TrackerSampler()
+{
 
-  inline float sigmoid( float x )
+}
+
+void TrackerSampler::sampling( const Mat& image, Rect boundingBox )
+{
+
+  clearSamples();
+
+  for ( size_t i = 0; i < samplers.size(); i++ )
   {
-    return 1.0f / ( 1.0f + exp( -x ) );
+    std::vector<Mat> current_samples;
+    samplers[i].second->sampling( image, boundingBox, current_samples );
+
+    //push in samples all current_samples
+    for ( size_t j = 0; j < current_samples.size(); j++ )
+    {
+      std::vector<Mat>::iterator it = samples.end();
+      samples.insert( it, current_samples.at( j ) );
+    }
   }
 
- private:
-  uint _numsamples;
-  ClfMilBoost::Params _myParams;
-  std::vector<int> _selectors;
-  std::vector<ClfOnlineStump*> _weakclf;
-  uint _counter;
+  if( !blockAddTrackerSampler )
+  {
+    blockAddTrackerSampler = true;
+  }
+}
 
-};
-
-class ClfOnlineStump
+bool TrackerSampler::addTrackerSamplerAlgorithm( String trackerSamplerAlgorithmType )
 {
- public:
-  float _mu0, _mu1, _sig0, _sig1;
-  float _q;
-  int _s;
-  float _log_n1, _log_n0;
-  float _e1, _e0;
-  float _lRate;
+  if( blockAddTrackerSampler )
+  {
+    return false;
+  }
+  Ptr<TrackerSamplerAlgorithm> sampler = TrackerSamplerAlgorithm::create( trackerSamplerAlgorithmType );
 
-  ClfOnlineStump();
-  ClfOnlineStump( int ind );
-  void init();
-  void update( const Mat& posx, const Mat& negx, const cv::Mat_<float> & posw = cv::Mat_<float>(), const cv::Mat_<float> & negw = cv::Mat_<float>() );
-  bool classify( const Mat& x, int i );
-  float classifyF( const Mat& x, int i );
-  std::vector<float> classifySetF( const Mat& x );
+  if (!sampler)
+  {
+    return false;
+  }
 
- private:
-  bool _trained;
-  int _ind;
+  samplers.push_back( std::make_pair( trackerSamplerAlgorithmType, sampler ) );
 
-};
+  return true;
+}
 
-//! @}
+bool TrackerSampler::addTrackerSamplerAlgorithm( Ptr<TrackerSamplerAlgorithm>& sampler )
+{
+  if( blockAddTrackerSampler )
+  {
+    return false;
+  }
+
+  if (!sampler)
+  {
+    return false;
+  }
+
+  String trackerSamplerAlgorithmType = sampler->getClassName();
+  samplers.push_back( std::make_pair( trackerSamplerAlgorithmType, sampler ) );
+
+  return true;
+}
+
+const std::vector<std::pair<String, Ptr<TrackerSamplerAlgorithm> > >& TrackerSampler::getSamplers() const
+{
+  return samplers;
+}
+
+const std::vector<Mat>& TrackerSampler::getSamples() const
+{
+  return samples;
+}
+
+void TrackerSampler::clearSamples()
+{
+  samples.clear();
+}
 
 } /* namespace cv */
-
-#endif

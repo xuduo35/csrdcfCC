@@ -39,80 +39,104 @@
  //
  //M*/
 
-#ifndef __OPENCV_ONLINEMIL_HPP__
-#define __OPENCV_ONLINEMIL_HPP__
-
-#include "opencv2/core.hpp"
-#include <limits>
+#include "precomp.hpp"
 
 namespace cv
 {
 
-//! @addtogroup tracking
-//! @{
+/*
+ *  TrackerFeatureSet
+ */
 
-//TODO based on the original implementation
-//http://vision.ucsd.edu/~bbabenko/project_miltrack.shtml
-
-class ClfOnlineStump;
-
-class CV_EXPORTS ClfMilBoost
+/*
+ * Constructor
+ */
+TrackerFeatureSet::TrackerFeatureSet()
 {
- public:
-  struct CV_EXPORTS Params
-  {
-    Params();
-    int _numSel;
-    int _numFeat;
-    float _lRate;
-  };
+  blockAddTrackerFeature = false;
+}
 
-  ClfMilBoost();
-  ~ClfMilBoost();
-  void init( const ClfMilBoost::Params &parameters = ClfMilBoost::Params() );
-  void update( const Mat& posx, const Mat& negx );
-  std::vector<float> classify( const Mat& x, bool logR = true );
+/*
+ * Destructor
+ */
+TrackerFeatureSet::~TrackerFeatureSet()
+{
 
-  inline float sigmoid( float x )
+}
+
+void TrackerFeatureSet::extraction( const std::vector<Mat>& images )
+{
+
+  clearResponses();
+  responses.resize( features.size() );
+
+  for ( size_t i = 0; i < features.size(); i++ )
   {
-    return 1.0f / ( 1.0f + exp( -x ) );
+    Mat response;
+    features[i].second->compute( images, response );
+    responses[i] = response;
   }
 
- private:
-  uint _numsamples;
-  ClfMilBoost::Params _myParams;
-  std::vector<int> _selectors;
-  std::vector<ClfOnlineStump*> _weakclf;
-  uint _counter;
+  if( !blockAddTrackerFeature )
+  {
+    blockAddTrackerFeature = true;
+  }
+}
 
-};
-
-class ClfOnlineStump
+void TrackerFeatureSet::selection()
 {
- public:
-  float _mu0, _mu1, _sig0, _sig1;
-  float _q;
-  int _s;
-  float _log_n1, _log_n0;
-  float _e1, _e0;
-  float _lRate;
 
-  ClfOnlineStump();
-  ClfOnlineStump( int ind );
-  void init();
-  void update( const Mat& posx, const Mat& negx, const cv::Mat_<float> & posw = cv::Mat_<float>(), const cv::Mat_<float> & negw = cv::Mat_<float>() );
-  bool classify( const Mat& x, int i );
-  float classifyF( const Mat& x, int i );
-  std::vector<float> classifySetF( const Mat& x );
+}
 
- private:
-  bool _trained;
-  int _ind;
+void TrackerFeatureSet::removeOutliers()
+{
 
-};
+}
 
-//! @}
+bool TrackerFeatureSet::addTrackerFeature( String trackerFeatureType )
+{
+  if( blockAddTrackerFeature )
+  {
+    return false;
+  }
+  Ptr<TrackerFeature> feature = TrackerFeature::create( trackerFeatureType );
+
+  if (!feature)
+  {
+    return false;
+  }
+
+  features.push_back( std::make_pair( trackerFeatureType, feature ) );
+
+  return true;
+}
+
+bool TrackerFeatureSet::addTrackerFeature( Ptr<TrackerFeature>& feature )
+{
+  if( blockAddTrackerFeature )
+  {
+    return false;
+  }
+
+  String trackerFeatureType = feature->getClassName();
+  features.push_back( std::make_pair( trackerFeatureType, feature ) );
+
+  return true;
+}
+
+const std::vector<std::pair<String, Ptr<TrackerFeature> > >& TrackerFeatureSet::getTrackerFeature() const
+{
+  return features;
+}
+
+const std::vector<Mat>& TrackerFeatureSet::getResponses() const
+{
+  return responses;
+}
+
+void TrackerFeatureSet::clearResponses()
+{
+  responses.clear();
+}
 
 } /* namespace cv */
-
-#endif
